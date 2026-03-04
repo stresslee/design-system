@@ -16,10 +16,10 @@ jobs:
           node-version: '18'
           
       - name: Install Style Dictionary
-        run: npm install -g style-dictionary
+        run: npm install style-dictionary
         
       - name: Build tokens
-        run: style-dictionary build
+        run: npx style-dictionary build
         
       - name: Commit CSS
         run: |
