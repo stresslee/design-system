@@ -21,6 +21,9 @@ jobs:
       - name: Install Style Dictionary
         run: npm install style-dictionary
         
+      - name: Transform tokens
+        run: npx --yes token-transformer tokens.json tokens-transformed.json
+        
       - name: Build tokens
         run: npx --yes style-dictionary build
         
