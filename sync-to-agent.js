@@ -87,7 +87,7 @@ function extractTokens(obj, pathSegments = [], results = []) {
 }
 
 // ─── Classify tokens by category ────────────────────────────────────
-function classifyToken(figmaPath) {
+function classifyToken(figmaPath, type) {
   const lower = figmaPath.toLowerCase();
   if (lower.startsWith('colors/') || lower.startsWith('component colors/')) return 'colors';
   if (lower.startsWith('spacing')) return 'spacing';
@@ -95,6 +95,10 @@ function classifyToken(figmaPath) {
   if (lower.startsWith('font') || lower.startsWith('line height')) return 'typography';
   if (lower.startsWith('container')) return 'layout';
   if (lower.startsWith('width') || lower.startsWith('paragraph')) return 'width';
+  // Text Styles: composite typography tokens (Display *, Text *)
+  if (/^(display|text)\s/i.test(lower) && type === 'TYPOGRAPHY') return 'textStyles';
+  // Effects: shadows, focus rings
+  if (lower.startsWith('shadows/') || lower.startsWith('focus rings/')) return 'effects';
   return 'other';
 }
 
@@ -122,13 +126,15 @@ const categories = {
   spacing: [],
   radius: [],
   typography: [],
+  textStyles: [],
+  effects: [],
   layout: [],
   width: [],
   other: [],
 };
 
 for (const token of allExtracted) {
-  const cat = classifyToken(token.figmaPath);
+  const cat = classifyToken(token.figmaPath, token.type);
   categories[cat].push(token);
 }
 
@@ -258,6 +264,48 @@ function generateDesignTokensMd() {
     lines.push('|-------|-------|-------------|');
     for (const t of categories.width) {
       lines.push(`| ${t.figmaPath} | ${t.resolvedValue} | \`${t.cssVar}\` |`);
+    }
+  }
+
+  // Text Styles (composite typography: Display/Text with fontFamily, fontSize, fontWeight, lineHeight)
+  if (categories.textStyles.length > 0) {
+    lines.push('');
+    lines.push('## Text Styles');
+    lines.push('');
+    lines.push('| Token | Font Family | Font Weight | Font Size | Line Height |');
+    lines.push('|-------|-------------|-------------|-----------|-------------|');
+    for (const t of categories.textStyles) {
+      const val = t.resolvedValue;
+      if (val && typeof val === 'object') {
+        const family = resolveAlias(val.fontFamily, allExtracted) || val.fontFamily;
+        const weight = resolveAlias(val.fontWeight, allExtracted) || val.fontWeight;
+        const fontSize = resolveAlias(val.fontSize, allExtracted) || val.fontSize;
+        const lineHeight = resolveAlias(val.lineHeight, allExtracted) || val.lineHeight;
+        lines.push(`| ${t.figmaPath} | ${family} | ${weight} | ${fontSize} | ${lineHeight} |`);
+      } else {
+        lines.push(`| ${t.figmaPath} | ${JSON.stringify(val)} | | | |`);
+      }
+    }
+  }
+
+  // Effects (shadows, focus rings)
+  if (categories.effects.length > 0) {
+    lines.push('');
+    lines.push('## Effects');
+    lines.push('');
+    lines.push('| Token | Type | Value |');
+    lines.push('|-------|------|-------|');
+    for (const t of categories.effects) {
+      const val = t.resolvedValue;
+      let displayValue;
+      if (Array.isArray(val)) {
+        displayValue = val.map(s => `${s.type} ${s.x},${s.y} blur=${s.blur} spread=${s.spread} ${s.color}`).join(' + ');
+      } else if (val && typeof val === 'object' && 'blur' in val) {
+        displayValue = `${val.type} ${val.x},${val.y} blur=${val.blur} spread=${val.spread} ${val.color}`;
+      } else {
+        displayValue = typeof val === 'string' ? val : JSON.stringify(val);
+      }
+      lines.push(`| ${t.figmaPath} | ${t.type || 'SHADOW'} | ${displayValue} |`);
     }
   }
 
