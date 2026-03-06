@@ -6,8 +6,8 @@ import fs from 'fs';
 const rawData = fs.readFileSync('./tokens.json', 'utf8');
 const allTokens = JSON.parse(rawData);
 
-// We manually merge the sets: 'core', 'light', 'theme'
-const setsToMerge = ['core', 'light', 'theme'];
+// Dynamically merge all sets except metadata/themes
+const setsToMerge = Object.keys(allTokens).filter(key => !key.startsWith('$'));
 const mergedTokens = {};
 
 setsToMerge.forEach((setName) => {
