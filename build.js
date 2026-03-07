@@ -6,18 +6,6 @@ import fs from 'fs';
 const rawData = fs.readFileSync('./tokens.json', 'utf8');
 const allTokens = JSON.parse(rawData);
 
-// Dynamically merge all sets except metadata/themes
-const setsToMerge = Object.keys(allTokens).filter(key => !key.startsWith('$'));
-const mergedTokens = {};
-
-setsToMerge.forEach((setName) => {
-    if (allTokens[setName]) {
-        for (const [key, value] of Object.entries(allTokens[setName])) {
-            mergedTokens[key] = { ...mergedTokens[key], ...value };
-        }
-    }
-});
-
 // Register all Tokens Studio transforms
 register(StyleDictionary);
 
@@ -70,8 +58,36 @@ StyleDictionary.registerTransformGroup({
     transforms: customTransforms,
 });
 
-const sd = new StyleDictionary({
-    tokens: mergedTokens,
+// Helper: merge specific token sets
+function mergeSets(setNames) {
+    const merged = {};
+    setNames.forEach((setName) => {
+        if (allTokens[setName]) {
+            for (const [key, value] of Object.entries(allTokens[setName])) {
+                merged[key] = { ...merged[key], ...value };
+            }
+        }
+    });
+    return merged;
+}
+
+// Common sets (primitives, typography, spacing, etc.)
+const commonSets = Object.keys(allTokens).filter(key =>
+    !key.startsWith('$') &&
+    !key.includes('Color modes/')
+);
+
+// Build light mode: common + light color mode
+const lightSets = [...commonSets, '1. Color modes/Light mode'];
+const lightTokens = mergeSets(lightSets);
+
+// Build dark mode: common + dark color mode
+const darkSets = [...commonSets, '1. Color modes/Dark mode'];
+const darkTokens = mergeSets(darkSets);
+
+// Build light tokens (main tokens.css)
+const sdLight = new StyleDictionary({
+    tokens: lightTokens,
     preprocessors: ['tokens-studio'],
     platforms: {
         css: {
@@ -87,4 +103,29 @@ const sd = new StyleDictionary({
     },
 });
 
-await sd.buildAllPlatforms();
+await sdLight.buildAllPlatforms();
+
+// Build dark tokens (tokens-dark.css) with [data-theme="dark"] selector
+const sdDark = new StyleDictionary({
+    tokens: darkTokens,
+    preprocessors: ['tokens-studio'],
+    platforms: {
+        css: {
+            transformGroup: 'custom-tokens-studio',
+            buildPath: 'build/css/',
+            files: [
+                {
+                    destination: 'tokens-dark.css',
+                    format: 'css/variables',
+                    options: {
+                        selector: '[data-theme="dark"]',
+                    },
+                },
+            ],
+        },
+    },
+});
+
+await sdDark.buildAllPlatforms();
+
+console.log('✅ tokens.css (light) + tokens-dark.css (dark) generated');
